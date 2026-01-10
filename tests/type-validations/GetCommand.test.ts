@@ -33,7 +33,9 @@ describe('GetCommand Input Types', () => {
     // Valid
     new GetCommand({
       TableName: 'MyTable',
-      Key: { pk: '1', sk: '2' }
+      Key: { pk: '1', sk: '2' },
+      ProjectionExpression: 'id',
+      AttributesToGet: ['id']
     })
   })
 
@@ -122,9 +124,7 @@ describe('GetCommand Input Types', () => {
     type Item = LegacyOutput['DecodedItem']
   })
 
-  test('Bracket notation paths are rejected by AttributesToGet', () => {
-    // Even though FieldPath supports brackets, DotPath (used by AttributesToGet) does not.
-    // We want to force users to use dot notation or implementation update.
+  test('Bracket notation paths are allowed in AttributesToGet', () => {
     const complexEntity = defineEntity(table, {
       name: 'Complex',
       schema: z.object({ id: z.string(), items: z.array(z.object({ id: z.string() })) }),
@@ -134,12 +134,39 @@ describe('GetCommand Input Types', () => {
       }
     })
 
-    new GetCommand({
+    const cmd = new GetCommand({
       TableName: 'T',
       Entity: complexEntity,
       Key: { hash: { id: '1' }, range: { id: '1' } },
-      // @ts-expect-error - brackets not supported in DotPath
-      AttributesToGet: ['items[0].id']
+      AttributesToGet: ['items[0].id', 'items[1]']
+    })
+
+    type Output = GetCommandOutput<typeof complexEntity, ['items[0].id', 'items[1]']>
+
+    // Verify inference
+    assertType<Output['DecodedItem']>({
+      items: [
+        { id: 'sub-id' }, // from items[0].id
+        { id: 'full-item' } // from items[1]
+      ]
+    })
+  })
+
+  test('Rejects ProjectionExpression/ExpressionAttributeNames when Entity is provided', () => {
+    new GetCommand({
+      TableName: 'T',
+      Entity: entity,
+      Key: { hash: { id: '1' }, range: { email: 'a@b.com' } },
+      // @ts-expect-error - ProjectionExpression not allowed in entity mode
+      ProjectionExpression: 'foo'
+    })
+
+    new GetCommand({
+      TableName: 'T',
+      Entity: entity,
+      Key: { hash: { id: '1' }, range: { email: 'a@b.com' } },
+      // @ts-expect-error - ExpressionAttributeNames not allowed in entity mode
+      ExpressionAttributeNames: { '#foo': 'bar' }
     })
   })
 

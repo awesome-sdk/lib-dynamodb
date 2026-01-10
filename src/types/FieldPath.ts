@@ -81,13 +81,28 @@ type Prop<T, K extends keyof T, V> = {} extends Pick<T, K> ? { [P in K]?: V } : 
  * // Result: { address: { street: string } }
  * ```
  */
-export type PickByPath<T, P extends string> = P extends `${infer Head}.${infer Rest}`
-  ? Head extends keyof T
-    ? Prop<T, Head, PickByPath<NonNullable<T[Head]>, Rest>>
-    : never
-  : P extends keyof T
-    ? Prop<T, P, T[P]>
-    : never
+export type PickByPath<T, P extends string> =
+  // Array element with nested path: "items[0].prop"
+  P extends `${infer Head}[${number}].${infer Rest}`
+    ? Head extends keyof T
+      ? NonNullable<T[Head]> extends (infer U)[]
+        ? Prop<T, Head, PickByPath<U, Rest>[]>
+        : never
+      : never
+    : // Array element path: "items[0]"
+      P extends `${infer Head}[${number}]`
+      ? Head extends keyof T
+        ? Prop<T, Head, T[Head]>
+        : never
+      : // Nested object path: "address.street"
+        P extends `${infer Head}.${infer Rest}`
+        ? Head extends keyof T
+          ? Prop<T, Head, PickByPath<NonNullable<T[Head]>, Rest>>
+          : never
+        : // Simple key: "name"
+          P extends keyof T
+          ? Prop<T, P, T[P]>
+          : never
 
 /**
  * Extracts a subset of an object type based on multiple dot-notation paths.

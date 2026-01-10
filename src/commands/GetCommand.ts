@@ -5,7 +5,7 @@ import {
 } from '@aws-sdk/lib-dynamodb'
 
 import { Entity } from '~/types/Entity'
-import { DotPath, PickByPaths } from '~/types/FieldPath'
+import { FieldPath, PickByPaths } from '~/types/FieldPath'
 import { InferEntity } from '~/types/InferEntity'
 import { Table } from '~/types/Table'
 
@@ -41,20 +41,30 @@ export type EntityKeyInput<TEntity> =
  * - If Entity is NOT provided, TableName is required (standard behavior).
  * - If Entity IS provided, TableName is optional (can be inferred or overridden).
  * - If Entity IS provided, Key must match the Entity's key structure.
- * - If Entity IS provided, AttributesToGet must be valid dot-notation paths of the Entity.
+ * - If Entity IS provided, AttributesToGet must be valid field paths (dot or bracket notation) of the Entity.
+ * - If Entity IS provided, ProjectionExpression and ExpressionAttributeNames are disallowed.
  */
 export type GetCommandInput<
   TEntity extends Entity<any, any, any, any, any, any, any, any, any> | undefined = undefined,
   TAttributesToGet extends readonly string[] | undefined = undefined
 > =
   TEntity extends Entity<any, any, any, any, any, any, any, any, any>
-    ? Omit<NativeGetCommandInput, 'TableName' | 'Key' | 'AttributesToGet'> & {
+    ? Omit<
+        NativeGetCommandInput,
+        | 'TableName'
+        | 'Key'
+        | 'AttributesToGet'
+        | 'ProjectionExpression'
+        | 'ExpressionAttributeNames'
+      > & {
         TableName?: string
         Entity: TEntity
         Key: EntityKeyInput<TEntity>
-        AttributesToGet?: TAttributesToGet extends readonly DotPath<InferEntity<TEntity>>[]
+        AttributesToGet?: TAttributesToGet extends readonly FieldPath<InferEntity<TEntity>>[]
           ? TAttributesToGet
-          : readonly DotPath<InferEntity<TEntity>>[]
+          : readonly FieldPath<InferEntity<TEntity>>[]
+        ProjectionExpression?: never
+        ExpressionAttributeNames?: never
       }
     : NativeGetCommandInput & {
         Entity?: undefined
