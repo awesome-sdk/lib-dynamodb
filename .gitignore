@@ -1,2 +1,7 @@
 dist
 node_modules
+
+# AI
+AGENTS.md
+GEMINI.md
+.agent
