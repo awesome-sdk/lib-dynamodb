@@ -18,7 +18,7 @@ describe('GetCommand Runtime', () => {
     expect(() => {
       new AwesomeGetCommand({
         Entity: entity,
-        Key: { pk: '1' }
+        RawKey: { pk: '1' }
       })
     }).toThrow('Entity support not implemented; provide TableName')
   })
@@ -29,7 +29,7 @@ describe('GetCommand Runtime', () => {
     const cmd = new AwesomeGetCommand({
       TableName: 'T',
       Entity: entity,
-      Key: { pk: '1' }
+      RawKey: { pk: '1' }
     })
     expect(cmd).toBeDefined()
   })
