@@ -1,6 +1,12 @@
+import path from 'path'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '~': path.resolve(__dirname, './src')
+    }
+  },
   test: {
     restoreMocks: true,
     clearMocks: true,
@@ -9,4 +15,3 @@ export default defineConfig({
     setupFiles: ['tests/vitest.setup.ts']
   }
 })
-

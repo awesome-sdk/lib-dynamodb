@@ -5,7 +5,7 @@ import {
   TranslateConfig
 } from '@aws-sdk/lib-dynamodb'
 
-import { AwesomeCommand } from './types/command'
+import { AwesomeCommand } from '~/commands/AwesomeCommand'
 
 export class DynamoDBDocumentClient {
   readonly originalClient: LibDynamoDBDocumentClient

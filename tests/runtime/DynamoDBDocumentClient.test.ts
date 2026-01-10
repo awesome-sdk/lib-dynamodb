@@ -5,8 +5,9 @@ import {
 } from '@aws-sdk/lib-dynamodb'
 import { describe, expect, test, vi } from 'vitest'
 
-import { DynamoDBDocumentClient } from '../../src'
-import { AwesomeCommand } from '../../src/types/command'
+import { AwesomeCommand } from '~/commands/AwesomeCommand'
+import { DynamoDBDocumentClient } from '~/index'
+
 import { createMockDocClient } from './createMockDocClient'
 
 describe('DynamoDBDocumentClient Runtime', () => {
