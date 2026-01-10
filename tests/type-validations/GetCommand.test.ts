@@ -1,8 +1,7 @@
-import { GetCommandInput as NativeGetCommandInput } from '@aws-sdk/lib-dynamodb'
-import { describe, expectTypeOf, test } from 'vitest'
+import { describe, test } from 'vitest'
 import { z } from 'zod'
 
-import { GetCommand, type GetCommandInput, defineEntity, defineTable } from '~/index'
+import { GetCommand, defineEntity, defineTable, raw } from '~/index'
 
 describe('GetCommand Input Types', () => {
   const table = defineTable({
@@ -65,26 +64,51 @@ describe('GetCommand Input Types', () => {
     })
   })
 
-  test('Accepts RawKey when Entity provided', () => {
+  test('Accepts raw() values in Key', () => {
     new GetCommand({
       TableName: 'T',
       Entity: entity,
-      RawKey: { pk: '1', sk: '2' }
+      Key: {
+        hash: raw('USER#1'),
+        range: raw('EMAIL#a@b.com')
+      }
     })
   })
 
-  test('Forbids mixing Key and RawKey', () => {
-    // @ts-expect-error - cannot provide bothKey and RawKey
+  test('Rejects plain scalar values in Key', () => {
+    new GetCommand({
+      TableName: 'T',
+      Entity: entity,
+      Key: {
+        // @ts-expect-error - plain scalar not allowed
+        hash: 'USER#1',
+        range: { email: 'a@b.com' }
+      }
+    })
+
+    new GetCommand({
+      TableName: 'T',
+      Entity: entity,
+      Key: {
+        hash: { id: '1' },
+        // @ts-expect-error - plain scalar not allowed
+        range: 'EMAIL#a@b.com'
+      }
+    })
+  })
+
+  test('Rejects RawKey property', () => {
     new GetCommand({
       TableName: 'T',
       Entity: entity,
       Key: { hash: { id: '1' }, range: { email: 'a' } },
+      // @ts-expect-error - RawKey no longer supported
       RawKey: { pk: '1', sk: '2' }
     })
   })
 
-  test('Forbids missing both Key and RawKey', () => {
-    // @ts-expect-error - must provide one
+  test('Forbids missing Key', () => {
+    // @ts-expect-error - Key is required
     new GetCommand({
       TableName: 'T',
       Entity: entity
@@ -124,7 +148,7 @@ describe('GetCommand Input Types', () => {
   test('RawKey is rejected when Entity is missing', () => {
     new GetCommand({
       TableName: 'MyTable',
-      // @ts-expect-error - RawKey not valid without Entity
+      // @ts-expect-error - RawKey property does not exist on NativeInput
       RawKey: { pk: '1', sk: '2' }
     })
   })
@@ -138,13 +162,6 @@ describe('GetCommand Input Types', () => {
         hash: { id: '1' }
       }
     })
-  })
-
-  test('RawKey matches NativeGetCommandInput Key', () => {
-    type Input = GetCommandInput<typeof entity>
-    type RawKeyType = Extract<Input, { RawKey: any }>['RawKey']
-
-    expectTypeOf<RawKeyType>().toEqualTypeOf<NativeGetCommandInput['Key']>()
   })
 
   test('Works as drop-in replacement (legacy usage)', () => {
