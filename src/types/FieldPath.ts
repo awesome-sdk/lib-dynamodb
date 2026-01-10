@@ -55,6 +55,38 @@ export type KeyFieldPath<T> = Extract<
   string
 >
 
+type Join<K, P> = K extends string | number
+  ? P extends string | number
+    ? `${K}.${P}`
+    : never
+  : never
+
+/**
+ * Checks if a path points to a required field (and all parent segments are required).
+ */
+type IsRequiredPath<T, P extends string> = P extends `${infer Head}.${infer Rest}`
+  ? Head extends keyof T
+    ? {} extends Pick<T, Head>
+      ? false // Head is optional
+      : IsRequiredPath<NonNullable<T[Head]>, Rest>
+    : false // Invalid path
+  : P extends keyof T
+    ? {} extends Pick<T, P>
+      ? false // Leaf is optional
+      : true
+    : false // Invalid path
+
+/**
+ * Extracts valid dot-notation paths for key fields that are **required** and **leaves**.
+ * - Same as KeyFieldPath but excludes any path that involves an optional property.
+ * - Used to ensure Entity keys are always fully required.
+ *
+ * @template T - The object type to extract paths from
+ */
+export type RequiredKeyFieldPath<T> = {
+  [P in KeyFieldPath<T>]: IsRequiredPath<T, P> extends true ? P : never
+}[KeyFieldPath<T>]
+
 /**
  * Internal helper that creates a property with appropriate optionality.
  *

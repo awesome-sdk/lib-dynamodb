@@ -9,7 +9,7 @@ import {
   GlobalIndexName,
   LocalIndexName
 } from './EntityKey'
-import { KeyFieldPath, PickByPaths } from './FieldPath'
+import { PickByPaths, RequiredKeyFieldPath } from './FieldPath'
 import { Table } from './Table'
 import { Prettify } from './utils'
 
@@ -17,7 +17,11 @@ import { Prettify } from './utils'
  * Defines how to construct a key part (hash or range) from entity fields.
  *
  */
-type KeyPartDefinition<TItem, TKeyFields extends readonly KeyFieldPath<TItem>[], TResult> = {
+type KeyPartDefinition<
+  TItem,
+  TKeyFields extends readonly RequiredKeyFieldPath<TItem>[],
+  TResult
+> = {
   fields: TKeyFields
   calculate: (item: PickByPaths<TItem, TKeyFields[number]>) => TResult
 }
@@ -36,7 +40,7 @@ export type EntityLocalIndexesDefinition<
   TTable extends Table<any>,
   TItem,
   TLocalIndexRangeKeyFields extends Partial<
-    Record<LocalIndexName<TTable>, readonly KeyFieldPath<TItem>[]>
+    Record<LocalIndexName<TTable>, readonly RequiredKeyFieldPath<TItem>[]>
   >
 > = {
   [K in keyof TLocalIndexRangeKeyFields]: {
@@ -62,7 +66,7 @@ export type EntityGlobalIndexesDefinition<TTable extends Table<any>, TItem> = {
   [K in GlobalIndexName<TTable>]?: {
     hashKey: KeyPartDefinition<
       TItem,
-      readonly KeyFieldPath<TItem>[],
+      readonly RequiredKeyFieldPath<TItem>[],
       EntityGlobalIndexHashKeyValue<TTable, Extract<K, GlobalIndexName<TTable>>>
     >
   } & (TTable['globalIndexes'] extends Record<string, any>
@@ -70,7 +74,7 @@ export type EntityGlobalIndexesDefinition<TTable extends Table<any>, TItem> = {
       ? {
           rangeKey: KeyPartDefinition<
             TItem,
-            readonly KeyFieldPath<TItem>[],
+            readonly RequiredKeyFieldPath<TItem>[],
             EntityGlobalIndexRangeKeyValue<TTable, Extract<K, GlobalIndexName<TTable>>>
           >
         }
@@ -82,7 +86,7 @@ type EntityLocalIndexesOption<
   TTable extends Table<any>,
   TItem,
   TLocalIndexRangeKeyFields extends Partial<
-    Record<LocalIndexName<TTable>, readonly KeyFieldPath<TItem>[]>
+    Record<LocalIndexName<TTable>, readonly RequiredKeyFieldPath<TItem>[]>
   >
 > =
   LocalIndexName<TTable> extends never
@@ -101,11 +105,11 @@ export interface Entity<
   TTable extends Table<any>,
   TName extends string,
   TItem,
-  THashKeyFields extends readonly KeyFieldPath<TItem>[],
-  TRangeKeyFields extends readonly KeyFieldPath<TItem>[],
+  THashKeyFields extends readonly RequiredKeyFieldPath<TItem>[],
+  TRangeKeyFields extends readonly RequiredKeyFieldPath<TItem>[],
   TGlobalIndexes extends Partial<Record<GlobalIndexName<TTable>, any>>,
   TLocalIndexRangeKeyFields extends Partial<
-    Record<LocalIndexName<TTable>, readonly KeyFieldPath<TItem>[]>
+    Record<LocalIndexName<TTable>, readonly RequiredKeyFieldPath<TItem>[]>
   >,
   TTtl extends ((domain: TItem) => number | undefined) | undefined,
   TEntityType extends string | undefined,

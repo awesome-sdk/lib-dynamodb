@@ -13,14 +13,14 @@ import {
   GlobalIndexName,
   LocalIndexName
 } from '~/types/EntityKey'
-import { KeyFieldPath, PickByPaths } from '~/types/FieldPath'
+import { PickByPaths, RequiredKeyFieldPath } from '~/types/FieldPath'
 import { Table } from '~/types/Table'
 
 export type { EntityKey } from '~/types/EntityKey'
 
 type KeyPartDefinition<
   TSchema extends ZodSchema,
-  TKeyFields extends readonly KeyFieldPath<z.infer<TSchema>>[],
+  TKeyFields extends readonly RequiredKeyFieldPath<z.infer<TSchema>>[],
   TResult
 > = {
   fields: TKeyFields
@@ -35,8 +35,8 @@ type EntityTypeOption<
 type EntityKeyDefinition<
   TTable extends Table<any>,
   TSchema extends ZodSchema,
-  THashKeyFields extends readonly KeyFieldPath<z.infer<TSchema>>[],
-  TRangeKeyFields extends readonly KeyFieldPath<z.infer<TSchema>>[]
+  THashKeyFields extends readonly RequiredKeyFieldPath<z.infer<TSchema>>[],
+  TRangeKeyFields extends readonly RequiredKeyFieldPath<z.infer<TSchema>>[]
 > = {
   hashKey: KeyPartDefinition<TSchema, THashKeyFields, EntityHashKeyValue<TTable>>
 } & (TTable['primaryIndex']['rangeKey'] extends string
@@ -44,7 +44,7 @@ type EntityKeyDefinition<
   : { rangeKey?: never })
 
 type EntityLocalIndexRangeKeyFields<TTable extends Table<any>, TSchema extends ZodSchema> = Partial<
-  Record<LocalIndexName<TTable>, readonly KeyFieldPath<z.infer<TSchema>>[]>
+  Record<LocalIndexName<TTable>, readonly RequiredKeyFieldPath<z.infer<TSchema>>[]>
 >
 
 type EntityTtlConstraint<TTable extends Table<any>> = TTable['ttl'] extends keyof TTable['fields']
@@ -55,8 +55,8 @@ export function defineEntity<
   TTable extends Table<any>,
   TName extends string,
   TSchema extends ZodSchema,
-  const THashKeyFields extends readonly KeyFieldPath<z.infer<TSchema>>[],
-  const TRangeKeyFields extends readonly KeyFieldPath<z.infer<TSchema>>[] = [],
+  const THashKeyFields extends readonly RequiredKeyFieldPath<z.infer<TSchema>>[],
+  const TRangeKeyFields extends readonly RequiredKeyFieldPath<z.infer<TSchema>>[] = [],
   const TGlobalIndexes extends Partial<Record<GlobalIndexName<TTable>, any>> = {},
   const TLocalIndexRangeKeyFields extends EntityLocalIndexRangeKeyFields<TTable, TSchema> = {},
   TTtl extends ((domain: z.infer<TSchema>) => number | undefined) | undefined = (
