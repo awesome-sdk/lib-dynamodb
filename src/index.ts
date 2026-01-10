@@ -6,19 +6,19 @@ export {
   DynamoDBDocument,
   DynamoDBDocumentClientCommand,
   ExecuteStatementCommand,
-  GetCommand,
-  paginateQuery, // Optional alias or just ensuring we have it
-  paginateQuery as paginateQueryHelper,
-  paginateScan,
-  paginateScan as paginateScanHelper,
   PutCommand,
   QueryCommand,
   ScanCommand,
   TransactGetCommand,
   TransactWriteCommand,
   TranslateConfig,
-  UpdateCommand
+  UpdateCommand,
+  paginateQuery, // Optional alias or just ensuring we have it
+  paginateQuery as paginateQueryHelper,
+  paginateScan,
+  paginateScan as paginateScanHelper
 } from '@aws-sdk/lib-dynamodb'
+export * from './commands/GetCommand'
 export * from './DynamoDBDocumentClient'
 export * from './errors'
 
