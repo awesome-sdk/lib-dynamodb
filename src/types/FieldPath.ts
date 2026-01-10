@@ -22,6 +22,17 @@ import { Prettify, UnionToIntersection } from '~/types/utils'
 export type FieldPath<T> = Extract<Paths<T, { bracketNotation: true }>, string>
 
 /**
+ * Extracts valid dot-notation paths from an object type.
+ * - Uses dot notation for property access (e.g., 'metadata.version')
+ * - Does NOT support bracket notation or array indices.
+ *
+ * Powered by type-fest's Paths with bracketNotation: false.
+ *
+ * @template T - The object type to extract paths from
+ */
+export type DotPath<T> = Extract<Paths<T, { bracketNotation: false }>, string>
+
+/**
  * Extracts valid dot-notation paths for key fields (hashKey/rangeKey).
  * - Only supports dot notation for nested properties
  * - Does NOT support array indices or bracket notation

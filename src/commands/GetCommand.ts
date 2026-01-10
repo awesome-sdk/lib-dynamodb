@@ -4,12 +4,10 @@ import {
   GetCommandOutput as NativeGetCommandOutput
 } from '@aws-sdk/lib-dynamodb'
 
-import { Raw } from '~/functions/raw'
 import { Entity } from '~/types/Entity'
-import { PickByPaths } from '~/types/FieldPath'
+import { DotPath, PickByPaths } from '~/types/FieldPath'
+import { InferEntity } from '~/types/InferEntity'
 import { Table } from '~/types/Table'
-
-type ResolveScalar<T> = T extends 'number' ? number : T extends 'binary' ? Uint8Array : string
 
 /**
  * Infers the structured Key shape ({ hash, range? }) from an Entity.
@@ -29,14 +27,10 @@ export type EntityKeyInput<TEntity> =
   >
     ? TTable extends Table<infer TFields>
       ? {
-          hash:
-            | PickByPaths<TItem, THashKeyFields[number]>
-            | Raw<ResolveScalar<TFields[TTable['primaryIndex']['hashKey']]>>
+          hash: PickByPaths<TItem, THashKeyFields[number]>
         } & (TTable['primaryIndex']['rangeKey'] extends string
           ? {
-              range:
-                | PickByPaths<TItem, TRangeKeyFields[number]>
-                | Raw<ResolveScalar<TFields[TTable['primaryIndex']['rangeKey']]>>
+              range: PickByPaths<TItem, TRangeKeyFields[number]>
             }
           : {})
       : never
@@ -46,22 +40,38 @@ export type EntityKeyInput<TEntity> =
  * Custom GetCommandInput that allows an optional Entity.
  * - If Entity is NOT provided, TableName is required (standard behavior).
  * - If Entity IS provided, TableName is optional (can be inferred or overridden).
- * - If Entity IS provided, Key must match the Entity's key structure (with raw support).
+ * - If Entity IS provided, Key must match the Entity's key structure.
+ * - If Entity IS provided, AttributesToGet must be valid dot-notation paths of the Entity.
  */
 export type GetCommandInput<
-  TEntity extends Entity<any, any, any, any, any, any, any, any, any> | undefined = undefined
+  TEntity extends Entity<any, any, any, any, any, any, any, any, any> | undefined = undefined,
+  TAttributesToGet extends readonly string[] | undefined = undefined
 > =
   TEntity extends Entity<any, any, any, any, any, any, any, any, any>
-    ? Omit<NativeGetCommandInput, 'TableName' | 'Key'> & {
+    ? Omit<NativeGetCommandInput, 'TableName' | 'Key' | 'AttributesToGet'> & {
         TableName?: string
         Entity: TEntity
         Key: EntityKeyInput<TEntity>
+        AttributesToGet?: TAttributesToGet extends readonly DotPath<InferEntity<TEntity>>[]
+          ? TAttributesToGet
+          : readonly DotPath<InferEntity<TEntity>>[]
       }
     : NativeGetCommandInput & {
         Entity?: undefined
+        // Ensure strictly no Entity implies no custom AttributesToGet logic
       }
 
-export type GetCommandOutput = NativeGetCommandOutput
+export type GetCommandOutput<
+  TEntity extends Entity<any, any, any, any, any, any, any, any, any> | undefined = undefined,
+  TAttributesToGet extends readonly string[] | undefined = undefined
+> = NativeGetCommandOutput &
+  (TEntity extends Entity<any, any, any, any, any, any, any, any, any>
+    ? {
+        DecodedItem?: TAttributesToGet extends readonly string[]
+          ? PickByPaths<InferEntity<TEntity>, TAttributesToGet[number]>
+          : InferEntity<TEntity>
+      }
+    : {})
 
 /**
  * Custom GetCommand wrapper.
@@ -69,9 +79,10 @@ export type GetCommandOutput = NativeGetCommandOutput
  * Entity handling logic is not yet implemented.
  */
 export class GetCommand<
-  TEntity extends Entity<any, any, any, any, any, any, any, any, any> | undefined = undefined
+  TEntity extends Entity<any, any, any, any, any, any, any, any, any> | undefined = undefined,
+  const TAttributesToGet extends readonly string[] | undefined = undefined
 > extends NativeGetCommand {
-  constructor(input: GetCommandInput<TEntity>) {
+  constructor(input: GetCommandInput<TEntity, TAttributesToGet>) {
     // Runtime check for Entity support
     if ('Entity' in input && input.Entity && !input.TableName) {
       throw new Error('Entity support not implemented; provide TableName')

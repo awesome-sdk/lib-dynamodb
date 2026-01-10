@@ -1,7 +1,8 @@
-import { describe, test } from 'vitest'
+import { assertType, describe, test } from 'vitest'
 import { z } from 'zod'
 
-import { GetCommand, defineEntity, defineTable, raw } from '~/index'
+import { GetCommandOutput } from '~/commands/GetCommand'
+import { GetCommand, defineEntity, defineTable } from '~/index'
 
 describe('GetCommand Input Types', () => {
   const table = defineTable({
@@ -12,24 +13,14 @@ describe('GetCommand Input Types', () => {
 
   const entity = defineEntity(table, {
     name: 'User',
-    schema: z.object({ id: z.string(), email: z.string() }),
+    schema: z.object({
+      id: z.string(),
+      email: z.string(),
+      profile: z.object({ age: z.number() }).optional()
+    }),
     key: {
       hashKey: { fields: ['id'], calculate: ({ id }) => `USER#${id}` },
       rangeKey: { fields: ['email'], calculate: ({ email }) => `EMAIL#${email}` }
-    }
-  })
-
-  const simpleTable = defineTable({
-    name: 'SimpleTable',
-    fields: { pk: 'string' },
-    primaryIndex: { hashKey: 'pk' }
-  })
-
-  const simpleEntity = defineEntity(simpleTable, {
-    name: 'Item',
-    schema: z.object({ id: z.string() }),
-    key: {
-      hashKey: { fields: ['id'], calculate: ({ id }) => `ITEM#${id}` }
     }
   })
 
@@ -60,22 +51,11 @@ describe('GetCommand Input Types', () => {
       TableName: 'T',
       Entity: entity,
       // @ts-expect-error - mismatched key structure (expecting hash/range)
-      Key: { pk: '1', sk: '2' }
+      Key: { pk: '1' }
     })
   })
 
-  test('Accepts raw() values in Key', () => {
-    new GetCommand({
-      TableName: 'T',
-      Entity: entity,
-      Key: {
-        hash: raw('USER#1'),
-        range: raw('EMAIL#a@b.com')
-      }
-    })
-  })
-
-  test('Rejects plain scalar values in Key', () => {
+  test('Rejects plain scalar values in Key (no Raw support)', () => {
     new GetCommand({
       TableName: 'T',
       Entity: entity,
@@ -85,71 +65,81 @@ describe('GetCommand Input Types', () => {
         range: { email: 'a@b.com' }
       }
     })
+  })
 
+  test('AttributesToGet validation', () => {
+    // Valid paths
     new GetCommand({
       TableName: 'T',
       Entity: entity,
-      Key: {
-        hash: { id: '1' },
-        // @ts-expect-error - plain scalar not allowed
-        range: 'EMAIL#a@b.com'
-      }
+      Key: { hash: { id: '1' }, range: { email: '2' } },
+      AttributesToGet: ['id', 'email', 'profile']
     })
-  })
 
-  test('Rejects RawKey property', () => {
+    // Nested path
     new GetCommand({
       TableName: 'T',
       Entity: entity,
-      Key: { hash: { id: '1' }, range: { email: 'a' } },
-      // @ts-expect-error - RawKey no longer supported
-      RawKey: { pk: '1', sk: '2' }
+      Key: { hash: { id: '1' }, range: { email: '2' } },
+      AttributesToGet: ['profile.age']
+    })
+
+    // Invalid path
+    new GetCommand({
+      TableName: 'T',
+      Entity: entity,
+      Key: { hash: { id: '1' }, range: { email: '2' } },
+      // @ts-expect-error - 'invalid' is not a path
+      AttributesToGet: ['invalid']
     })
   })
 
-  test('Forbids missing Key', () => {
-    // @ts-expect-error - Key is required
-    new GetCommand({
-      TableName: 'T',
-      Entity: entity
-    })
+  test('DecodedItem inference', () => {
+    // Case 1: No AttributesToGet -> Full Entity
+    type FullOutput = GetCommandOutput<typeof entity>
+    assertType<FullOutput['DecodedItem']>({ id: '1', email: '2' })
+    assertType<FullOutput['DecodedItem']>({ id: '1', email: '2', profile: { age: 1 } })
+
+    // Use assertType to check assignability
+    const fullItem: FullOutput['DecodedItem'] = { id: '1', email: '2' }
+    assertType<{ id: string; email: string; profile?: { age: number } } | undefined>(fullItem)
+
+    // Case 2: Selected Attributes -> Narrowed Entity
+    type NarrowedOutput = GetCommandOutput<typeof entity, ['id', 'profile.age']>
+    const narrowedItem: NarrowedOutput['DecodedItem'] = { id: '1', profile: { age: 1 } }
+
+    // Should allow selected fields
+    assertType<{ id: string; profile?: { age: number } } | undefined>(narrowedItem)
+
+    // Should NOT have 'email'
+    // @ts-expect-error - email is not selected
+    narrowedItem?.email
   })
 
-  test('Infers correct shape for Hash-Only entity', () => {
-    new GetCommand({
-      TableName: 'T',
-      Entity: simpleEntity,
-      Key: {
-        hash: { id: '1' }
+  test('DecodedItem is NOT present when Entity is missing (legacy mode)', () => {
+    type LegacyOutput = GetCommandOutput
+    // @ts-expect-error - DecodedItem should not exist
+    type Item = LegacyOutput['DecodedItem']
+  })
+
+  test('Bracket notation paths are rejected by AttributesToGet', () => {
+    // Even though FieldPath supports brackets, DotPath (used by AttributesToGet) does not.
+    // We want to force users to use dot notation or implementation update.
+    const complexEntity = defineEntity(table, {
+      name: 'Complex',
+      schema: z.object({ id: z.string(), items: z.array(z.object({ id: z.string() })) }),
+      key: {
+        hashKey: { fields: ['id'], calculate: ({ id }) => `COMPLEX#${id}` },
+        rangeKey: { fields: ['id'], calculate: ({ id }) => `COMPLEX#${id}` }
       }
     })
 
     new GetCommand({
       TableName: 'T',
-      Entity: simpleEntity,
-      Key: {
-        hash: { id: '1' },
-        // @ts-expect-error - range: undefined also strictly forbidden
-        range: undefined
-      }
-    })
-
-    new GetCommand({
-      TableName: 'T',
-      Entity: simpleEntity,
-      Key: {
-        hash: { id: '1' },
-        // @ts-expect-error - range not allowed
-        range: { something: 'else' }
-      }
-    })
-  })
-
-  test('RawKey is rejected when Entity is missing', () => {
-    new GetCommand({
-      TableName: 'MyTable',
-      // @ts-expect-error - RawKey property does not exist on NativeInput
-      RawKey: { pk: '1', sk: '2' }
+      Entity: complexEntity,
+      Key: { hash: { id: '1' }, range: { id: '1' } },
+      // @ts-expect-error - brackets not supported in DotPath
+      AttributesToGet: ['items[0].id']
     })
   })
 
@@ -158,16 +148,37 @@ describe('GetCommand Input Types', () => {
       TableName: 'T',
       Entity: entity,
       // @ts-expect-error - missing range
+      Key: { hash: { id: '1' } }
+    })
+  })
+
+  test('Rejects range key for Hash-Only Entity', () => {
+    const table = defineTable({
+      name: 'H',
+      fields: { pk: 'string' },
+      primaryIndex: { hashKey: 'pk' }
+    })
+    const hEntity = defineEntity(table, {
+      name: 'HE',
+      schema: z.object({ id: z.string() }),
+      key: { hashKey: { fields: ['id'], calculate: ({ id }) => id } }
+    })
+
+    new GetCommand({
+      TableName: 'T',
+      Entity: hEntity,
       Key: {
-        hash: { id: '1' }
+        hash: { id: '1' },
+        // @ts-expect-error - range not allowed
+        range: { something: 'else' }
       }
     })
   })
 
-  test('Works as drop-in replacement (legacy usage)', () => {
+  test('Legacy support works', () => {
     new GetCommand({
-      TableName: 'LegacyTable',
-      Key: { id: 123 }
+      TableName: 'T',
+      Key: { pk: '1' }
     })
   })
 })

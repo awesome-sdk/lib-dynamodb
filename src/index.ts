@@ -23,4 +23,3 @@ export * from './DynamoDBDocumentClient'
 export * from './errors'
 
 export * from './functions'
-export * from './functions/raw'
