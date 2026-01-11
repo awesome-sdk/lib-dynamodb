@@ -1,4 +1,4 @@
-import { assertType, describe, test } from 'vitest'
+import { assertType, describe, expect, test } from 'vitest'
 import { z } from 'zod'
 
 import { GetCommandOutput } from '~/commands/GetCommand'
@@ -49,12 +49,14 @@ describe('GetCommand Input Types', () => {
       }
     })
 
-    new GetCommand({
-      TableName: 'T',
-      Entity: entity,
-      // @ts-expect-error - mismatched key structure (expecting hash/range)
-      Key: { pk: '1' }
-    })
+    expect(() => {
+      new GetCommand({
+        TableName: 'T',
+        Entity: entity,
+        // @ts-expect-error - mismatched key structure (expecting hash/range)
+        Key: { pk: '1' }
+      })
+    }).toThrow()
   })
 
   test('Rejects plain scalar values in Key (no Raw support)', () => {
@@ -171,12 +173,14 @@ describe('GetCommand Input Types', () => {
   })
 
   test('Rejects missing Range key for Hash+Range Entity', () => {
-    new GetCommand({
-      TableName: 'T',
-      Entity: entity,
-      // @ts-expect-error - missing range
-      Key: { hash: { id: '1' } }
-    })
+    expect(() => {
+      new GetCommand({
+        TableName: 'T',
+        Entity: entity,
+        // @ts-expect-error - missing range
+        Key: { hash: { id: '1' } }
+      })
+    }).toThrow('Missing range key')
   })
 
   test('Rejects range key for Hash-Only Entity', () => {

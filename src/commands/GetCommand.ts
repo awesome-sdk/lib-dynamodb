@@ -4,6 +4,9 @@ import {
   GetCommandOutput as NativeGetCommandOutput
 } from '@aws-sdk/lib-dynamodb'
 
+import { resolveKey } from '~/internal/resolveKey'
+import { resolveProjections } from '~/internal/resolveProjections'
+import { withDecodeMiddleware } from '~/middleware/decodeMiddleware'
 import { Entity } from '~/types/Entity'
 import { FieldPath, PickByPaths } from '~/types/FieldPath'
 import { InferEntity } from '~/types/InferEntity'
@@ -92,13 +95,55 @@ export class GetCommand<
   TEntity extends Entity<any, any, any, any, any, any, any, any, any> | undefined = undefined,
   const TAttributesToGet extends readonly string[] | undefined = undefined
 > extends NativeGetCommand {
+  private entity?: Entity<any, any, any, any, any, any, any, any, any, any>
+  private middlewareAdded = false
+
   constructor(input: GetCommandInput<TEntity, TAttributesToGet>) {
-    // Runtime check for Entity support
-    if ('Entity' in input && input.Entity && !input.TableName) {
-      throw new Error('Entity support not implemented; provide TableName')
+    if (!('Entity' in input) || !input.Entity) {
+      super(input as NativeGetCommandInput)
+      return
     }
 
-    // @ts-expect-error - We are passing input that might have Entity/Key structure which native doesn't expect.
-    super(input)
+    const { Entity: entity, Key, TableName, AttributesToGet, ...rest } = input
+    const { table } = entity
+    const effectiveTableName = TableName ?? table.name
+
+    const nativeKey = resolveKey(entity, Key, effectiveTableName)
+
+    // Handle AttributesToGet -> ProjectionExpression conversion for proper nested path support
+    let projectionExpression: string | undefined
+    let expressionAttributeNames: Record<string, string> | undefined
+    let attributesToGetNative: string[] | undefined
+
+    if (AttributesToGet) {
+      if (entity) {
+        const result = resolveProjections(AttributesToGet as unknown as string[])
+        projectionExpression = result.ProjectionExpression
+        expressionAttributeNames = result.ExpressionAttributeNames
+      } else {
+        // Pass through if legacy (though types might block this, runtime safety)
+        attributesToGetNative = AttributesToGet as unknown as string[]
+      }
+    }
+
+    super({
+      TableName: effectiveTableName,
+      Key: nativeKey,
+      ProjectionExpression: projectionExpression,
+      ExpressionAttributeNames: expressionAttributeNames,
+      AttributesToGet: attributesToGetNative,
+      ...rest
+    } as NativeGetCommandInput)
+
+    this.entity = entity
+
+    if (this.entity) {
+      if (this.middlewareAdded) {
+        return
+      }
+
+      withDecodeMiddleware(this.middlewareStack, this.entity, effectiveTableName)
+      this.middlewareAdded = true
+    }
   }
 }
