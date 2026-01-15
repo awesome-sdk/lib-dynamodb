@@ -142,7 +142,7 @@ export class GetCommand<
         return
       }
 
-      withDecodeMiddleware(this.middlewareStack, this.entity, effectiveTableName)
+      withDecodeMiddleware(this.middlewareStack, this.entity, effectiveTableName, 'GetCommand')
       this.middlewareAdded = true
     }
   }
