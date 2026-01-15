@@ -17,7 +17,7 @@ import { Prettify } from './utils'
  * Defines how to construct a key part (hash or range) from entity fields.
  *
  */
-type KeyPartDefinition<
+export type KeyPartDefinition<
   TItem,
   TKeyFields extends readonly RequiredKeyFieldPath<TItem>[],
   TResult
