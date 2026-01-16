@@ -325,7 +325,7 @@ export type QueryCommandInput<
   TEntity extends Entity<any, any, any, any, any, any, any, any, any, any> | undefined = undefined,
   TIndexName extends EntityIndexNames<TEntity> | undefined = undefined
 > =
-  TEntity extends Entity<any, any, any, any, any, any, any, any, any, any>
+  TEntity extends Entity<infer TTable, any, any, any, any, any, any, any, any, any>
     ? Omit<
         NativeQueryCommandInput,
         | 'TableName'
@@ -334,6 +334,7 @@ export type QueryCommandInput<
         | 'FilterExpression'
         | 'ExpressionAttributeNames'
         | 'ExpressionAttributeValues'
+        | 'ConsistentRead'
       > & {
         TableName?: string
         Entity: TEntity
@@ -342,7 +343,9 @@ export type QueryCommandInput<
         FilterExpression?: FilterCondition<TEntity>
         ExpressionAttributeNames?: never
         ExpressionAttributeValues?: never
-      }
+      } & (TIndexName extends GlobalIndexName<TTable>
+          ? { ConsistentRead?: never }
+          : { ConsistentRead?: boolean })
     : NativeQueryCommandInput & {
         Entity?: undefined
       }

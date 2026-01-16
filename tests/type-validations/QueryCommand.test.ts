@@ -314,7 +314,8 @@ describe('QueryCommand Input Types', () => {
         KeyConditionExpression: {
           hash: { from: { id: '1' } },
           range: { from: { count: 50 } }
-        }
+        },
+        Limit: 123
       })
 
       new QueryCommand({
@@ -325,6 +326,57 @@ describe('QueryCommand Input Types', () => {
           hash: { value: 123 }, // pk is string
           range: { gt: 10 }
         }
+      })
+    })
+  })
+  describe('ConsistentRead Validation', () => {
+    test('Allowed for Primary Index', () => {
+      new QueryCommand({
+        Entity: entity,
+        KeyConditionExpression: { hash: { value: 'USER#1' } },
+        ConsistentRead: true
+      })
+    })
+
+    test('Allowed for LSI', () => {
+      const table = defineTable({
+        name: 'LsiTableCR',
+        fields: { pk: 'string', sk: 'string', lsiSk: 'number' },
+        primaryIndex: { hashKey: 'pk', rangeKey: 'sk' },
+        localIndexes: { LSI1: { rangeKey: 'lsiSk' } }
+      })
+      const lsiEntity = defineEntity(table, {
+        name: 'LsiEntityCR',
+        schema: z.object({ id: z.string(), date: z.string(), count: z.number() }),
+        key: {
+          hashKey: { fields: ['id'], calculate: ({ id }) => `USER#${id}` },
+          rangeKey: { fields: ['date'], calculate: ({ date }) => date }
+        },
+        localIndexes: {
+          LSI1: { rangeKey: { fields: ['count'], calculate: ({ count }) => count } }
+        }
+      })
+
+      new QueryCommand({
+        Entity: lsiEntity,
+        IndexName: 'LSI1',
+        KeyConditionExpression: {
+          hash: { value: 'USER#1' },
+          range: { gt: 100 }
+        },
+        ConsistentRead: true
+      })
+    })
+
+    test('Disallowed for GSI', () => {
+      new QueryCommand({
+        Entity: entity,
+        IndexName: 'GSI1',
+        KeyConditionExpression: {
+          hash: { value: 'test@example.com' }
+        },
+        // @ts-expect-error - ConsistentRead is not supported for GSI
+        ConsistentRead: true
       })
     })
   })
