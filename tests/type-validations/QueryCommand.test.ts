@@ -380,4 +380,103 @@ describe('QueryCommand Input Types', () => {
       })
     })
   })
+  describe('Enhanced AttributesToGet & Expression Validation', () => {
+    test('AttributesToGet with Path Inference', () => {
+      new QueryCommand({
+        Entity: entity,
+        KeyConditionExpression: { hash: { value: 'USER#1' } },
+        AttributesToGet: ['email', 'age', 'meta.version']
+      })
+
+      new QueryCommand({
+        Entity: entity,
+        KeyConditionExpression: { hash: { value: 'USER#1' } },
+        // @ts-expect-error - invalid field path
+        AttributesToGet: ['non_existent']
+      })
+    })
+
+    test('Output Inference with AttributesToGet', () => {
+      const cmd = new QueryCommand({
+        Entity: entity,
+        KeyConditionExpression: { hash: { value: 'USER#1' } },
+        AttributesToGet: ['email', 'age']
+      })
+
+      type Output = QueryCommandOutput<typeof entity, ['email', 'age']>
+
+      assertType<Output['DecodedItems']>(
+        [] as {
+          email: string
+          age: number
+        }[]
+      )
+
+      // @ts-expect-error - should not have 'id'
+      assertType<Output['DecodedItems']>([] as { id: string }[])
+    })
+
+    test('Select vs AttributesToGet', () => {
+      new QueryCommand({
+        Entity: entity,
+        KeyConditionExpression: { hash: { value: 'USER#1' } },
+        AttributesToGet: ['email'],
+        // @ts-expect-error - Select not allowed when AttributesToGet is present
+        Select: 'ALL_ATTRIBUTES'
+      })
+
+      new QueryCommand({
+        Entity: entity,
+        KeyConditionExpression: { hash: { value: 'USER#1' } },
+        Select: 'ALL_ATTRIBUTES'
+      })
+    })
+
+    test('Disallowed Expressions in Entity Mode', () => {
+      new QueryCommand({
+        Entity: entity,
+        KeyConditionExpression: { hash: { value: 'USER#1' } },
+        // @ts-expect-error - ProjectionExpression not allowed
+        ProjectionExpression: 'email'
+      })
+
+      new QueryCommand({
+        Entity: entity,
+        KeyConditionExpression: { hash: { value: 'USER#1' } },
+        // @ts-expect-error - ExpressionAttributeNames not allowed
+        ExpressionAttributeNames: { '#e': 'email' }
+      })
+
+      new QueryCommand({
+        Entity: entity,
+        KeyConditionExpression: { hash: { value: 'USER#1' } },
+        // @ts-expect-error - ExpressionAttributeValues not allowed
+        ExpressionAttributeValues: { ':v': 'val' }
+      })
+    })
+  })
+  describe('Select: COUNT Validation', () => {
+    test('Count selection removes items from output', () => {
+      type Output = QueryCommandOutput<typeof entity, undefined, 'COUNT'>
+
+      assertType<Output>({
+        Count: 1,
+        ScannedCount: 1
+      } as any)
+
+      // @ts-expect-error - Items should not exist
+      assertType<Output['Items']>([])
+
+      // @ts-expect-error - DecodedItems should not exist
+      assertType<Output['DecodedItems']>([])
+    })
+
+    test('Input accepts COUNT', () => {
+      new QueryCommand({
+        Entity: entity,
+        KeyConditionExpression: { hash: { value: 'USER#1' } },
+        Select: 'COUNT'
+      })
+    })
+  })
 })

@@ -5,6 +5,7 @@ import {
 } from '@aws-sdk/lib-dynamodb'
 
 import { UnsafePath } from '~/expressions/unsafePath'
+import { resolveProjections } from '~/internal/resolveProjections'
 import { withDecodeMiddleware } from '~/middleware/decodeMiddleware'
 import { Entity } from '~/types/Entity'
 import {
@@ -322,54 +323,79 @@ export type FilterCondition<TEntity> =
  * Custom QueryCommandInput that allows an optional Entity.
  */
 export type QueryCommandInput<
-  TEntity extends Entity<any, any, any, any, any, any, any, any, any, any> | undefined = undefined,
-  TIndexName extends EntityIndexNames<TEntity> | undefined = undefined
+  TEntity extends Entity<any, any, any, any, any, any, any, any, any, any, any> | undefined =
+    undefined,
+  TIndexName extends EntityIndexNames<TEntity> | undefined = undefined,
+  TAttributesToGet extends readonly string[] | undefined = undefined,
+  TSelect extends string | undefined = undefined
 > =
-  TEntity extends Entity<infer TTable, any, any, any, any, any, any, any, any, any>
+  TEntity extends Entity<infer TTable, any, any, any, any, any, any, any, any, any, any>
     ? Omit<
         NativeQueryCommandInput,
         | 'TableName'
         | 'IndexName'
         | 'KeyConditionExpression'
         | 'FilterExpression'
+        | 'AttributesToGet'
+        | 'ProjectionExpression'
         | 'ExpressionAttributeNames'
         | 'ExpressionAttributeValues'
         | 'ConsistentRead'
+        | 'Select'
       > & {
         TableName?: string
         Entity: TEntity
         IndexName?: TIndexName
         KeyConditionExpression: KeyCondition<TEntity, TIndexName>
         FilterExpression?: FilterCondition<TEntity>
+        AttributesToGet?: TAttributesToGet extends readonly FieldPath<InferEntity<TEntity>>[]
+          ? TAttributesToGet
+          : readonly FieldPath<InferEntity<TEntity>>[]
+        ProjectionExpression?: never
         ExpressionAttributeNames?: never
         ExpressionAttributeValues?: never
       } & (TIndexName extends GlobalIndexName<TTable>
           ? { ConsistentRead?: never }
-          : { ConsistentRead?: boolean })
+          : { ConsistentRead?: boolean }) &
+        (TAttributesToGet extends readonly string[] ? { Select?: never } : { Select?: TSelect })
     : NativeQueryCommandInput & {
         Entity?: undefined
       }
 
 export type QueryCommandOutput<
-  TEntity extends Entity<any, any, any, any, any, any, any, any, any, any> | undefined = undefined
-> = NativeQueryCommandOutput &
-  (TEntity extends Entity<any, any, any, any, any, any, any, any, any, any>
-    ? {
-        DecodedItems?: InferEntity<TEntity>[]
-      }
-    : {})
+  TEntity extends Entity<any, any, any, any, any, any, any, any, any, any, any> | undefined =
+    undefined,
+  TAttributesToGet extends readonly string[] | undefined = undefined,
+  TSelect extends string | undefined = undefined
+> = TSelect extends 'COUNT'
+  ? Omit<NativeQueryCommandOutput, 'Items'> & {
+      Items?: never
+      DecodedItems?: never
+      Count: number
+    }
+  : NativeQueryCommandOutput &
+      (TEntity extends Entity<any, any, any, any, any, any, any, any, any, any, any>
+        ? {
+            DecodedItems?: (TAttributesToGet extends readonly string[]
+              ? PickByPaths<InferEntity<TEntity>, TAttributesToGet[number]>
+              : InferEntity<TEntity>)[]
+          }
+        : {})
 
 /**
  * Custom QueryCommand wrapper.
  */
 export class QueryCommand<
-  TEntity extends Entity<any, any, any, any, any, any, any, any, any, any> | undefined = undefined,
-  const TIndexName extends EntityIndexNames<TEntity> | undefined = undefined
+  TEntity extends Entity<any, any, any, any, any, any, any, any, any, any, any> | undefined =
+    undefined,
+  const TIndexName extends EntityIndexNames<TEntity> | undefined = undefined,
+  const TAttributesToGet extends readonly string[] | undefined = undefined,
+  const TSelect extends string | undefined = undefined
 > extends NativeQueryCommand {
-  private entity?: Entity<any, any, any, any, any, any, any, any, any, any>
+  private entity?: Entity<any, any, any, any, any, any, any, any, any, any, any>
   private middlewareAdded = false
 
-  constructor(input: QueryCommandInput<TEntity, TIndexName>) {
+  constructor(input: QueryCommandInput<TEntity, TIndexName, TAttributesToGet, TSelect>) {
     if (!('Entity' in input) || !input.Entity) {
       super(input as NativeQueryCommandInput)
       return
@@ -381,6 +407,8 @@ export class QueryCommand<
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       KeyConditionExpression: _kce,
       FilterExpression,
+      AttributesToGet,
+      Select,
       ...rest
     } = input
     const { table } = entity
@@ -399,6 +427,23 @@ export class QueryCommand<
       }
     }
 
+    // Handle AttributesToGet -> ProjectionExpression conversion for proper nested path support
+    let projectionExpression: string | undefined
+    let expressionAttributeNames: Record<string, string> | undefined
+    let attributesToGetNative: string[] | undefined
+    let effectiveSelect = Select as any
+
+    if (AttributesToGet) {
+      if (entity) {
+        const result = resolveProjections(AttributesToGet as unknown as string[])
+        projectionExpression = result.ProjectionExpression
+        expressionAttributeNames = result.ExpressionAttributeNames
+        effectiveSelect = 'SPECIFIC_ATTRIBUTES'
+      } else {
+        attributesToGetNative = AttributesToGet as unknown as string[]
+      }
+    }
+
     // Runtime implementation of expression building is out of scope for this task.
     // We pass empty strings or raw values for now just to satisfy the super call,
     // assuming the user knows this is currently just for type testing.
@@ -406,6 +451,10 @@ export class QueryCommand<
 
     super({
       TableName: effectiveTableName,
+      ProjectionExpression: projectionExpression,
+      ExpressionAttributeNames: expressionAttributeNames,
+      AttributesToGet: attributesToGetNative,
+      Select: effectiveSelect,
       ...rest
     } as NativeQueryCommandInput)
 
